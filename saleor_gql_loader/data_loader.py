@@ -801,7 +801,6 @@ class ETLDataLoader:
             "email": "default@default.com",
             "isActive": False,
         }
-
         override_dict(default_kwargs, kwargs)
 
         variables = {"input": default_kwargs}
@@ -859,6 +858,47 @@ class ETLDataLoader:
             return None
         return response["data"]["customers"]["edges"][0]["node"]["id"]
 
+    def list_customers(self, first, after=None):
+        """
+        Finds a customer by email
+        Parameters
+        ----------
+        after: str cursor
+        first: int
+
+        Returns
+        -------
+        [{email, id}], pageInfo
+        """
+        variables = {"first": first, "after": after}
+
+        query = """
+            query MyQuery($first: Int!, $after: String ) {
+                customers(after: $after, first: $first) {
+                    pageInfo {
+                        hasNextPage
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            email
+                            id
+                        }
+                    }
+                }
+            }
+        """
+
+        response = graphql_request(query, variables, self.headers, self.endpoint_url)
+
+        handle_errors(response, ("data", "customers"))
+        edges = response["data"]["customers"]["edges"]
+        customers = [edge["node"] for edge in edges]
+        return (
+            customers,
+            response["data"]["customers"]["pageInfo"],
+        )
+
     def delete_customer_account(self, customer_id):
         """
         Deletes a customer (as an admin)
@@ -892,6 +932,33 @@ class ETLDataLoader:
         handle_errors(response, ("data", "customerDelete", "accountErrors"))
 
         return response["data"]["customerDelete"]["user"]["id"]
+
+    def bulk_delete_customers(self, customer_ids):
+        """
+        Deletes customers by ids (as an admin)
+        Parameters
+        ----------
+        customer_ids: [str]
+
+        Returns
+        -------
+
+        """
+        variables = {"ids": customer_ids}
+
+        query = """
+            mutation CustomerBulkDelete($ids: [ID!]!) {
+                customerBulkDelete(ids: $ids) {
+                    count
+                }
+            }
+        """
+
+        response = graphql_request(query, variables, self.headers, self.endpoint_url)
+
+        handle_errors(response, ("data", "customerDelete", "accountErrors"))
+
+        return response["data"]
 
     def update_product(self, product_id, input_data):
         """update a product.
