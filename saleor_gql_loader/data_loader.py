@@ -784,6 +784,96 @@ class ETLDataLoader:
 
         return response["data"]["productMediaCreate"]["media"]["id"]
 
+    def get_product_variants(self):
+        """
+        Retrieves the first 10 product variants along with some additional details.
+
+        Returns
+        -------
+        list of dict
+            Each dictionary contains details about a product variant and the associated product.
+        """
+        query = """
+            query MyQuery {
+                productVariants(first: 10) {
+                    edges {
+                        node {
+                            id
+                            name
+                            product {
+                                id
+                                name
+                                externalReference
+                            }
+                            externalReference
+                        }
+                    }
+                }
+            }
+        """
+
+        response = graphql_request(query, {}, self.headers, self.endpoint_url)
+
+        handle_errors(response, ("data", "productVariants"))
+        if len(response["data"]["productVariants"]["edges"]) < 1:
+            return None
+
+        product_variants = []
+        for edge in response["data"]["productVariants"]["edges"]:
+            product_variants.append(edge["node"])
+
+        return product_variants
+
+    def create_draft_order(self, **kwargs):
+        """
+        Creates a draft order
+        Parameters
+        ----------
+        kwargs: Dict containing shippingAddress, user, quantity, variantId, lines, and billingAddress.
+
+        Returns
+        -------
+        The ID of the created order.
+        """
+
+        default_kwargs = {
+            "shippingAddress": {},
+            "billingAddress": {},
+            "user": "",
+            "quantity": 10,
+            "variantId": "",
+            "lines": [],
+        }
+
+        override_dict(default_kwargs, kwargs)
+
+        variables = default_kwargs
+
+        query = """
+        mutation MyMutation2($shippingAddress: AddressInput = {}, $user: ID = "", $lines: [OrderLineCreateInput!], $billingAddress: AddressInput = {}) {
+                draftOrderCreate(
+                    input: {billingAddress: $billingAddress, channelId: "", externalReference: "", shippingAddress: $shippingAddress, user: $user, userEmail: "", lines: $lines}
+                ) {
+                    order {
+                        id
+                    }
+                    errors {
+                        addressType
+                        code
+                        field
+                        message
+                        orderLines
+                        variants
+                    }
+                }
+            }
+        """
+        response = graphql_request(query, variables, self.headers, self.endpoint_url)
+
+        handle_errors(response, ("data", "draftOrderCreate", "errors"))
+
+        return response["data"]["draftOrderCreate"]["order"]["id"]
+
     def create_customer_account(self, **kwargs):
         """
         Creates a customer (as an admin)
