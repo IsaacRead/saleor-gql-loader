@@ -824,6 +824,36 @@ class ETLDataLoader:
 
         return product_variants
 
+    def find_product_variant_by_sku(self, sku):
+        """
+        Finds a product variant by SKU
+
+        Parameters
+        ----------
+        sku: str
+
+        Returns
+        -------
+        id: str
+        """
+        variables = {"sku": sku}
+
+        query = """
+            query MyQuery($sku: String = "") {
+                productVariant(sku: $sku) {
+                    id
+                }
+            }
+        """
+
+        response = graphql_request(query, variables, self.headers, self.endpoint_url)
+        print("response: ", response)
+        handle_errors(response, ("data", "productVariant"))
+
+        if response["data"]["productVariant"] is None:
+            return None
+        return response["data"]["productVariant"]["id"]
+
     def create_draft_order(self, **kwargs):
         """
         Creates a draft order
@@ -843,6 +873,7 @@ class ETLDataLoader:
             "quantity": 10,
             "variantId": "",
             "lines": [],
+            "channelId": "default-channel",
         }
 
         override_dict(default_kwargs, kwargs)
@@ -850,9 +881,9 @@ class ETLDataLoader:
         variables = default_kwargs
 
         query = """
-        mutation MyMutation2($shippingAddress: AddressInput = {}, $user: ID = "", $lines: [OrderLineCreateInput!], $billingAddress: AddressInput = {}) {
+        mutation MyMutation2($shippingAddress: AddressInput = {}, $user: ID = "", $lines: [OrderLineCreateInput!], $billingAddress: AddressInput = {}, $channelId: ID = "", $externalReference: String = "") {
                 draftOrderCreate(
-                    input: {billingAddress: $billingAddress, channelId: "", externalReference: "", shippingAddress: $shippingAddress, user: $user, userEmail: "", lines: $lines}
+                    input: {billingAddress: $billingAddress, channelId: $channelId, externalReference: $externalReference, shippingAddress: $shippingAddress, user: $user, userEmail: "", lines: $lines}
                 ) {
                     order {
                         id
@@ -874,6 +905,43 @@ class ETLDataLoader:
 
         return response["data"]["draftOrderCreate"]["order"]["id"]
 
+    def find_customer_by_metadata(self, key="wordpress_id", value=""):
+        """
+        Finds customers by a key-value pair in their metadata
+
+        Parameters
+        ----------
+        key: str
+        value: str
+
+        Returns
+        -------
+        customers: list
+        """
+        variables = {"key": key, "value": value}
+
+        query = """
+            query MyQuery($key: String = "wordpress_id", $value: String = "") {
+                customers(first: 1, filter: {metadata: {key: $key, value: $value}}) {
+                    edges {
+                        node {
+                            id
+                            email
+                        }
+                    }
+                }
+            }
+        """
+
+        response = graphql_request(query, variables, self.headers, self.endpoint_url)
+
+        handle_errors(response, ("data", "customers"))
+
+        if len(response["data"]["customers"]["edges"]) < 1:
+            return None
+
+        return response["data"]["customers"]["edges"][0]["node"]
+
     def create_customer_account(self, **kwargs):
         """
         Creates a customer (as an admin)
@@ -891,6 +959,7 @@ class ETLDataLoader:
             "email": "default@default.com",
             "isActive": False,
         }
+
         override_dict(default_kwargs, kwargs)
 
         variables = {"input": default_kwargs}
