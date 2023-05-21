@@ -10,7 +10,7 @@ requires a lot of dev better redo the project as a django app inside saleor
 project for easier testing.
 
 """
-from .utils import (
+from utils import (
     graphql_request,
     graphql_multipart_request,
     override_dict,
@@ -904,6 +904,54 @@ class ETLDataLoader:
         handle_errors(response, ("data", "draftOrderCreate", "errors"))
 
         return response["data"]["draftOrderCreate"]["order"]["id"]
+
+    def complete_draft_order(self, order_id):
+        """
+        Completes a draft order.
+
+        Parameters
+        ----------
+        order_id: str
+            The ID of the order to be completed.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the data and potential errors from the GraphQL response.
+        """
+
+        # Prepare the GraphQL query (mutation)
+        query = """
+        mutation MyMutation($id: ID!) {
+            draftOrderComplete(id: $id) {
+                errors {
+                    addressType
+                    code
+                    field
+                    message
+                    orderLines
+                    variants
+                }
+                order {
+                    id
+                }
+            }
+        }
+        """
+
+        # Prepare the variables for the GraphQL query
+        variables = {
+            "id": order_id,
+        }
+
+        # Execute the GraphQL query
+        response = graphql_request(query, variables, self.headers, self.endpoint_url)
+
+        # Handle potential errors
+        handle_errors(response, ("data", "draftOrderComplete", "errors"))
+
+        # Return the GraphQL response
+        return response["data"]["draftOrderComplete"]
 
     def find_customer_by_metadata(self, key="wordpress_id", value=""):
         """
